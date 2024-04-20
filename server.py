@@ -15,7 +15,6 @@ strategies = [DemoStrat0(), DemoStrat1()]
 match_games = []
 match_active = False
 match_results = pd.DataFrame(columns=['strategy', 'score'])
-server_process = None
 
 def load_dframe(pth, pth_strats):
     global match_results
