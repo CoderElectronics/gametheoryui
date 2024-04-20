@@ -1,5 +1,5 @@
 from nicegui import ui, events
-import time, atexit, multiprocessing
+import time, atexit
 import dill as pickle
 import numpy as np
 import pandas as pd
