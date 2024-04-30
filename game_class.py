@@ -1,32 +1,34 @@
+from enum import Enum
+
+
+class GameMove(Enum):
+    STEAL = 0
+    SHARE = 1
+
+
 class GameStrategy:
     meta = {}
-    game_plays = []
 
-    def __init__(self, **args):
-        self.meta = args
+    def __init__(self, name: str, author: str, description: str) -> None:
+        self.meta = {'name': name, 'author': author, 'description': description}
 
-    def get_meta(self):
+    def get_meta(self) -> dict[str, str]:
         return self.meta
 
-    def get_plays(self):
-        return self.game_plays
-
-    # Game logic
-    """
-    def next_play(self):
+    def next_play(self, player_history: list[GameMove], opponent_history: list[GameMove]) -> GameMove:
+        """
+        :param player_history: List of your moves
+        :param opponent_history: List of the opponent's moves
+        :return: Your next move
+        """
         pass
-    """
+
 
 class DemoStrat0(GameStrategy):
     def __init__(self):
         super().__init__(name="Demo Strategy 0", author="John Doe", description="zeroth demo strategy")
 
-    def next_play(self):
-        pass
 
 class DemoStrat1(GameStrategy):
     def __init__(self):
         super().__init__(name="Demo Strategy 1", author="Jane Doe", description="first demo strategy")
-
-    def next_play(self):
-        pass
