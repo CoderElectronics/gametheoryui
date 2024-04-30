@@ -234,7 +234,7 @@ if __name__ in {"__main__", "__mp_main__"}:
             ui.tab('Results')
             ui.space()
             ui.button('UI Theme', icon='brightness_6', on_click=dark_mode_toggle).classes('mr-2')
-            ui.button('Stop Server', icon='logout', on_click=exit_stop_server).classes('mr-2')
+            ui.button('Stop Server', icon='logout', on_click=exit_stop_server).classes('mr-2').props('color="red"')
 
     with ui.footer(value=False) as footer:
         ui.label('Footer')
