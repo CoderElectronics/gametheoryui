@@ -19,6 +19,7 @@ class ImportedStrat(GameStrategy):
         :return: Your next move
         """
         # This is where your strategy logic goes
+        # Each item in the history arrays will be equal to GameMove.STEAL or GameMove.SHARE
         pass
 
 
