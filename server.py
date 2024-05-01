@@ -7,14 +7,53 @@ import os.path as path
 from threading import Timer
 import plotly.graph_objects as go
 import plotly.express as px
+from pprint import pprint
 
-from game_class import GameStrategy, DemoStrat0, DemoStrat1
+from game_class import GameStrategy, GameMove, DemoStrat0, DemoStrat1
 
 # Match engine states
 strategies = [DemoStrat0(), DemoStrat1()]
 match_games = []
 match_active = False
 match_results = pd.DataFrame(columns=['strategy', 'score'])
+
+# Match status
+match_parameters = {
+    "num_rounds": 20,
+    "steal_amount": 5,
+    "steal_min_amount": 1,
+    "share_amount": 3
+}
+
+match_plays = [[], []]
+match_scores = [[], []]
+
+def run_strategy_game(params, mgs):
+    match_state = [[], []]
+    scores = [[], []]
+
+    for rnd in range(int(params["num_rounds"])):
+        match_state[0].append(mgs[0].next_play(match_state[0], match_state[1]))
+        match_state[1].append(mgs[1].next_play(match_state[1], match_state[0]))
+
+    for rnd in zip(match_state[0], match_state[1]):
+        if rnd[0] == GameMove.STEAL and rnd[1] == GameMove.STEAL:
+            scores[0].append(params["steal_min_amount"])
+            scores[1].append(params["steal_min_amount"])
+        elif rnd[0] == GameMove.SHARE and rnd[1] == GameMove.SHARE:
+            scores[0].append(params["share_amount"])
+            scores[1].append(params["share_amount"])
+        elif rnd[0] == GameMove.STEAL:
+            scores[0].append(params["steal_amount"])
+            scores[1].append(0)
+        elif rnd[1] == GameMove.STEAL:
+            scores[1].append(params["steal_amount"])
+            scores[0].append(0)
+        else:
+            print("Invalid game state")
+            pprint(rnd)
+
+    return match_state, scores
 
 def load_dframe(pth, pth_strats):
     global match_results
@@ -93,26 +132,66 @@ def class_view(cls, actions=True, card=True):
 
 @ui.refreshable
 def match_view(clss):
-    global match_active, panels
+    global match_active, panels, match_parameters
     with ui.column():
         ui.markdown('####Match Queue')
 
         with ui.row():
             def start_match():
-                global match_active, panels
+                global match_active, panels, match_scores, match_plays, match_parameters
+
                 if len(match_games) == 2:
                     match_active = True
                     match_panel_view.refresh()
 
                     ui.notify('Match started, jumping to match tab', type='success')
-                    Timer(2, lambda: panels.set_value('Match View')).start()
+
+                    match_plays, match_scores = run_strategy_game(match_parameters, match_games)
+
+                    """
+                    print("\nMatch Plays")
+                    pprint(match_plays)
+
+                    print("\nMatch Scores")
+                    pprint(match_scores)
+
+                    print("Strat #0 plays: {}\nStrat #1 plays: {}".format(len(match_plays[0]), len(match_plays[1])))
+                    """
+
+                    match_panel_view.refresh()
+
+                    Timer(1, lambda: panels.set_value('Match View')).start()
                 else:
                     ui.notify('Please select 2 teams before starting a match', type='warning')
 
-            ui.button('Start Match', on_click=start_match)
+            def set_game_param(param, e):
+                global match_parameters
+                print("Param updated: {}, {}".format(param, e))
+                match_parameters[param] = e
 
-            with ui.button('', on_click=clear_matches):
-                ui.icon('delete')
+            with ui.column():
+                with ui.expansion('Match Options', icon='work'):
+                    with ui.column():
+                        with ui.row():
+                            ui.number(label='Number of Rounds', value=match_parameters["num_rounds"],
+                                      on_change=lambda e: set_game_param('num_rounds', e.value))
+
+                            ui.number(label='Share Amount (pts/$)', value=match_parameters["share_amount"],
+                                      on_change=lambda e: set_game_param('share_amount', e.value))
+
+                        with ui.row():
+                            ui.number(label='Single Steal Amount (pts/$)', value=match_parameters["steal_amount"],
+                                      on_change=lambda e: set_game_param('steal_amount', e.value))
+
+                            ui.number(label='Double Steal Amount (pts/$)', value=match_parameters["steal_min_amount"],
+                                      on_change=lambda e: set_game_param('steal_min_amount', e.value))
+
+
+                with ui.row():
+                    ui.button('Start Match', on_click=start_match)
+
+                    with ui.button('', on_click=clear_matches):
+                        ui.icon('delete')
 
     with ui.splitter().style('width: 30rem') as splitter:
         with splitter.before:
@@ -140,48 +219,67 @@ def results_view():
 
 @ui.refreshable
 def match_panel_view():
-    global match_active
-    global match_results
+    global match_active, match_results, match_scores, match_plays
 
     if len(match_games) == 2 and match_active:
         with ui.row():
             with ui.column():
-                fig = go.Figure(go.Waterfall(
+                """
+                1st team visualization
+                """
+                fig_one = go.Figure(go.Waterfall(
                     name="20", orientation="v",
-                    measure=["relative", "relative", "total", "relative", "relative", "total"],
-                    x=["Play {}".format(x) for x in range(5)],
+                    measure=["relative"]*len(match_scores[0]),
+                    x=["Play {}".format(x) for x in range(len(match_scores[0]))],
                     textposition="outside",
-                    text=["+60", "+80", "", "-40", "-20", "Total"],
-                    y=[60, 80, 0, -40, -20, 0],
+                    text=["Steal" if pl == GameMove.STEAL else "Share" for pl in match_plays[0]],
+                    y=match_scores[0],
                     connector={"line": {"color": "rgb(63, 63, 63)"}},
                 ))
 
-                fig.update_layout(
-                    title=match_games[0].get_meta()["name"]+" vs. "+match_games[1].get_meta()["name"],
+                fig_one.update_layout(
+                    title=match_games[0].get_meta()["name"],
                     showlegend=True
                 )
 
-                ui.plotly(fig)
+                ui.plotly(fig_one)
 
-            with ui.column().classes("pl-2"):
-                ui.markdown("####Match Plays")
-                with ui.timeline(side='right').classes('pl-3'):
-                    ui.timeline_entry('+15 to Demo Strategy 0 by fair split.',
-                                      title='Play 0',
-                                      subtitle='Demo Strategy 0')
-                    ui.timeline_entry('+5 to Demo Strategy 1 by fair split.',
-                                      title='Play 1',
-                                      subtitle='Demo Strategy 1')
+                """
+                2nd team visualization
+                """
+                fig_two = go.Figure(go.Waterfall(
+                    name="20", orientation="v",
+                    measure=["relative"] * len(match_scores[1]),
+                    x=["Play {}".format(x) for x in range(len(match_scores[1]))],
+                    textposition="outside",
+                    text=["Steal" if pl == GameMove.STEAL else "Share" for pl in match_plays[1]],
+                    y=match_scores[1],
+                    connector={"line": {"color": "rgb(63, 63, 63)"}},
+                ))
 
-            def add_fake_scores():
+                fig_two.update_layout(
+                    title=match_games[1].get_meta()["name"],
+                    showlegend=True
+                )
+
+                ui.plotly(fig_two)
+
+            def add_match_scores():
                 global match_results
-                ndf = pd.DataFrame([{'strategy': obj.get_meta()["name"], 'score': np.random.randint(0, 100)} for obj in strategies])
+
+                ndf = pd.DataFrame([
+                    {'strategy': match_games[0].get_meta()["name"], 'score': np.sum(match_scores[0])},
+                    {'strategy': match_games[1].get_meta()["name"], 'score': np.sum(match_scores[1])}
+                ])
 
                 match_results = pd.concat([match_results, ndf])
                 print(match_results)
                 results_view.refresh()
 
-            ui.button('Register scores', on_click=add_fake_scores)
+                ui.notify('Scores saved, jumping to leaderboard tab', type='success')
+                Timer(2, lambda: panels.set_value('Results')).start()
+
+            ui.button('Save scores', on_click=add_match_scores)
     else:
         ui.markdown("#### No Match Started<br>")
         ui.markdown("Select two teams and start a match to view statistics.")
@@ -190,7 +288,7 @@ def match_panel_view():
 def handle_upload(e: events.UploadEventArguments):
     text = e.content.read().decode('utf-8')
     game_args = {}
-    exec(text, {'GameStrategy': GameStrategy}, game_args)
+    exec(text, {'GameStrategy': GameStrategy, 'GameMove': GameMove}, game_args)
 
     strategies.append(game_args['userGame'])
     print(strategies)

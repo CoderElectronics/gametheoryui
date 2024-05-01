@@ -1,10 +1,8 @@
 from enum import Enum
 
-
 class GameMove(Enum):
     STEAL = 0
     SHARE = 1
-
 
 class GameStrategy:
     meta = {}
