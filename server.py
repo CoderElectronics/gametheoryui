@@ -1,5 +1,5 @@
 from nicegui import ui, events
-import time, atexit
+import time, atexit, copy
 import dill as pickle
 import numpy as np
 import pandas as pd
@@ -9,10 +9,10 @@ import plotly.graph_objects as go
 import plotly.express as px
 from pprint import pprint
 
-from game_class import GameStrategy, GameMove, DemoStrat0, DemoStrat1
+from game_class import GameStrategy, GameMove
 
 # Match engine states
-strategies = [DemoStrat0(), DemoStrat1()]
+strategies = []
 match_games = []
 match_active = False
 match_results = pd.DataFrame(columns=['strategy', 'score'])
@@ -33,8 +33,10 @@ def run_strategy_game(params, mgs):
     scores = [[], []]
 
     for rnd in range(int(params["num_rounds"])):
-        match_state[0].append(mgs[0].next_play(match_state[0], match_state[1]))
-        match_state[1].append(mgs[1].next_play(match_state[1], match_state[0]))
+        prev_match_state = copy.deepcopy(match_state)
+
+        match_state[0].append(mgs[0].next_play(prev_match_state[0], prev_match_state[1]))
+        match_state[1].append(mgs[1].next_play(prev_match_state[1], prev_match_state[0]))
 
     for rnd in zip(match_state[0], match_state[1]):
         if rnd[0] == GameMove.STEAL and rnd[1] == GameMove.STEAL:
@@ -276,6 +278,8 @@ def match_panel_view():
                 print(match_results)
                 results_view.refresh()
 
+                save_dframe("scores.csv", "strategies.bin")
+
                 ui.notify('Scores saved, jumping to leaderboard tab', type='success')
                 Timer(2, lambda: panels.set_value('Results')).start()
 
@@ -291,8 +295,8 @@ def handle_upload(e: events.UploadEventArguments):
     exec(text, {'GameStrategy': GameStrategy, 'GameMove': GameMove}, game_args)
 
     strategies.append(game_args['userGame'])
-    print(strategies)
     main_panel.refresh()
+    save_dframe("scores.csv", "strategies.bin")
 
 # Home page layout
 @ui.refreshable

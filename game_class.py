@@ -20,13 +20,3 @@ class GameStrategy:
         :return: Your next move
         """
         pass
-
-
-class DemoStrat0(GameStrategy):
-    def __init__(self):
-        super().__init__(name="Demo Strategy 0", author="John Doe", description="zeroth demo strategy")
-
-
-class DemoStrat1(GameStrategy):
-    def __init__(self):
-        super().__init__(name="Demo Strategy 1", author="Jane Doe", description="first demo strategy")
