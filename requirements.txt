@@ -3,3 +3,5 @@ flask
 plotly
 pandas
 dill
+fastapi
+openpyxl

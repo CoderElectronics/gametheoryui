@@ -1,5 +1,5 @@
-from nicegui import ui, events
-import time, atexit, copy
+from nicegui import ui, events, app
+import time, atexit, copy, io, uuid
 import dill as pickle
 import numpy as np
 import pandas as pd
@@ -8,6 +8,8 @@ from threading import Timer
 import plotly.graph_objects as go
 import plotly.express as px
 from pprint import pprint
+
+from fastapi.responses import StreamingResponse
 
 from game_class import GameStrategy, GameMove
 
@@ -215,9 +217,44 @@ def match_view(clss):
 def results_view():
     global match_results
     with ui.row():
-        fig = px.bar(match_results, x='strategy', y='score')
+        if match_results[match_results.columns[0]].count() > 0:
+            fig = px.bar(match_results, x='strategy', y='score')
 
-        ui.plotly(fig)
+            ui.plotly(fig)
+
+            fig_scatter = px.scatter(match_results, x='strategy', y='score', size=list(match_results['score']), color=list(match_results['score']), hover_data=['score'])
+
+            ui.plotly(fig_scatter)
+        else:
+            with ui.column():
+                ui.markdown("#### No Data<br>")
+                ui.markdown("Run some games to show stats.")
+    with ui.row().classes('w-full'):
+        ui.space()
+
+        def erase_scores():
+            global match_results
+
+            match_results = match_results.iloc[0:0]
+            results_view.refresh()
+            save_dframe("scores.csv", "strategies.bin")
+
+        ui.button("Erase score board", on_click=erase_scores)
+
+        file_name = f'scores-{uuid.uuid4()}.xlsx'
+        download_path = f'/download/' + file_name
+        @app.get(download_path)
+        def download():
+            global match_results
+
+            df_out = io.BytesIO()
+            match_results.to_excel(df_out)  # write to BytesIO buffer
+            df_out.seek(0)
+
+            headers = {'Content-Disposition': f'attachment; filename={file_name}'}
+            return StreamingResponse(df_out, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', headers=headers)
+
+        ui.button('Download results', on_click=lambda: ui.download(download_path))
 
 @ui.refreshable
 def match_panel_view():
@@ -225,64 +262,65 @@ def match_panel_view():
 
     if len(match_games) == 2 and match_active:
         with ui.row():
-            with ui.column():
-                """
-                1st team visualization
-                """
-                fig_one = go.Figure(go.Waterfall(
-                    name="20", orientation="v",
-                    measure=["relative"]*len(match_scores[0]),
-                    x=["Play {}".format(x) for x in range(len(match_scores[0]))],
-                    textposition="outside",
-                    text=["Steal" if pl == GameMove.STEAL else "Share" for pl in match_plays[0]],
-                    y=match_scores[0],
-                    connector={"line": {"color": "rgb(63, 63, 63)"}},
-                ))
+            """
+            1st team visualization
+            """
+            fig_one = go.Figure(go.Waterfall(
+                name="20", orientation="v",
+                measure=["relative"]*len(match_scores[0]),
+                x=["Play {}".format(x) for x in range(len(match_scores[0]))],
+                textposition="outside",
+                text=["Steal" if pl == GameMove.STEAL else "Share" for pl in match_plays[0]],
+                y=match_scores[0],
+                connector={"line": {"color": "rgb(63, 63, 63)"}},
+            ))
 
-                fig_one.update_layout(
-                    title=match_games[0].get_meta()["name"],
-                    showlegend=True
-                )
+            fig_one.update_layout(
+                title=match_games[0].get_meta()["name"],
+                showlegend=True
+            )
 
-                ui.plotly(fig_one)
+            ui.plotly(fig_one)
 
-                """
-                2nd team visualization
-                """
-                fig_two = go.Figure(go.Waterfall(
-                    name="20", orientation="v",
-                    measure=["relative"] * len(match_scores[1]),
-                    x=["Play {}".format(x) for x in range(len(match_scores[1]))],
-                    textposition="outside",
-                    text=["Steal" if pl == GameMove.STEAL else "Share" for pl in match_plays[1]],
-                    y=match_scores[1],
-                    connector={"line": {"color": "rgb(63, 63, 63)"}},
-                ))
+            """
+            2nd team visualization
+            """
+            fig_two = go.Figure(go.Waterfall(
+                name="20", orientation="v",
+                measure=["relative"] * len(match_scores[1]),
+                x=["Play {}".format(x) for x in range(len(match_scores[1]))],
+                textposition="outside",
+                text=["Steal" if pl == GameMove.STEAL else "Share" for pl in match_plays[1]],
+                y=match_scores[1],
+                connector={"line": {"color": "rgb(63, 63, 63)"}},
+            ))
 
-                fig_two.update_layout(
-                    title=match_games[1].get_meta()["name"],
-                    showlegend=True
-                )
+            fig_two.update_layout(
+                title=match_games[1].get_meta()["name"],
+                showlegend=True
+            )
 
-                ui.plotly(fig_two)
+            ui.plotly(fig_two)
 
-            def add_match_scores():
-                global match_results
+        def add_match_scores():
+            global match_results
 
-                ndf = pd.DataFrame([
-                    {'strategy': match_games[0].get_meta()["name"], 'score': np.sum(match_scores[0])},
-                    {'strategy': match_games[1].get_meta()["name"], 'score': np.sum(match_scores[1])}
-                ])
+            ndf = pd.DataFrame([
+                {'strategy': match_games[0].get_meta()["name"], 'score': np.sum(match_scores[0])},
+                {'strategy': match_games[1].get_meta()["name"], 'score': np.sum(match_scores[1])}
+            ])
 
-                match_results = pd.concat([match_results, ndf])
-                print(match_results)
-                results_view.refresh()
+            match_results = pd.concat([match_results, ndf])
+            print(match_results)
+            results_view.refresh()
 
-                save_dframe("scores.csv", "strategies.bin")
+            save_dframe("scores.csv", "strategies.bin")
 
-                ui.notify('Scores saved, jumping to leaderboard tab', type='success')
-                Timer(2, lambda: panels.set_value('Results')).start()
+            ui.notify('Scores saved, jumping to leaderboard tab', type='success')
+            Timer(2, lambda: panels.set_value('Results')).start()
 
+        with ui.row().classes('w-full'):
+            ui.space()
             ui.button('Save scores', on_click=add_match_scores)
     else:
         ui.markdown("#### No Match Started<br>")
