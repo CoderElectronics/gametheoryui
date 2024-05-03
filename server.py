@@ -1,16 +1,32 @@
+"""
+GameTheoryUI
+by: Ari Stehney
+
+a lovely little app for simulating the effectiveness of prisoners dilemna strategies.
+
+Usage:
+    Run the script with Python3.11
+
+    $ python server.py
+
+Data:
+    scores.csv: Saves the scoreboard and game history from the Results tab on restarts.
+    strategies.bin: Python strategies class-list save state to persist imported scripts.
+"""
+
 from nicegui import ui, events, app
+
 import time, atexit, copy, io, uuid
 import dill as pickle
 import numpy as np
 import pandas as pd
 import os.path as path
-from threading import Timer
 import plotly.graph_objects as go
 import plotly.express as px
+
+from threading import Timer
 from pprint import pprint
-
 from fastapi.responses import StreamingResponse
-
 from game_class import GameStrategy, GameMove
 
 # Match engine states
@@ -59,6 +75,9 @@ def run_strategy_game(params, mgs):
 
     return match_state, scores
 
+"""
+Score dataframe persistence functions.
+"""
 def load_dframe(pth, pth_strats):
     global match_results
     global strategies
@@ -93,7 +112,13 @@ def clear_matches():
     match_view.refresh()
     match_panel_view.refresh()
 
-# Random utility stuff
+def exit_stop_server():
+    save_dframe("scores.csv", "strategies.bin")
+    exit()
+
+"""
+Random UI stuff
+"""
 class NullContextManager(object):
     def __init__(self, dummy_resource=None):
         self.dummy_resource = dummy_resource
@@ -112,11 +137,9 @@ def dark_mode_toggle():
         ui.dark_mode().enable()
         dark_mode_status = 1
 
-def exit_stop_server():
-    save_dframe("scores.csv", "strategies.bin")
-    exit()
-
-# Data views
+"""
+Actual tabs and UI elements
+"""
 @ui.refreshable
 def class_view(cls, actions=True, card=True):
     meta = cls.get_meta()
@@ -134,6 +157,7 @@ def class_view(cls, actions=True, card=True):
                     ui.label("add to match")
                 ui.button('View results', on_click=lambda: panels.set_value('Results'))
 
+# Home page match options and current match status section view
 @ui.refreshable
 def match_view(clss):
     global match_active, panels, match_parameters
@@ -151,16 +175,6 @@ def match_view(clss):
                     ui.notify('Match started, jumping to match tab', type='success')
 
                     match_plays, match_scores = run_strategy_game(match_parameters, match_games)
-
-                    """
-                    print("\nMatch Plays")
-                    pprint(match_plays)
-
-                    print("\nMatch Scores")
-                    pprint(match_scores)
-
-                    print("Strat #0 plays: {}\nStrat #1 plays: {}".format(len(match_plays[0]), len(match_plays[1])))
-                    """
 
                     match_panel_view.refresh()
 
@@ -213,10 +227,13 @@ def match_view(clss):
 
     return clss
 
+# Results tab UI layout
 @ui.refreshable
 def results_view():
     global match_results
+
     with ui.row():
+        # Match result visualization UI code
         if match_results[match_results.columns[0]].count() > 0:
             fig = px.bar(match_results, x='strategy', y='score')
 
@@ -229,9 +246,11 @@ def results_view():
             with ui.column():
                 ui.markdown("#### No Data<br>")
                 ui.markdown("Run some games to show stats.")
+
     with ui.row().classes('w-full'):
         ui.space()
 
+        # Leaderboard clear function (mostly for debugging)
         def erase_scores():
             global match_results
 
@@ -241,6 +260,7 @@ def results_view():
 
         ui.button("Erase score board", on_click=erase_scores)
 
+        # Excel export function
         file_name = f'scores-{uuid.uuid4()}.xlsx'
         download_path = f'/download/' + file_name
         @app.get(download_path)
@@ -360,7 +380,10 @@ def main_panel():
         with ui.tab_panel('Results'):
             results_view()
 
-# App run loop
+"""
+Main app runtime loop
+"""
+
 if __name__ in {"__main__", "__mp_main__"}:
     # Register dataframe callbacks
     load_dframe("scores.csv", "strategies.bin")
