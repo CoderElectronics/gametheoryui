@@ -13,13 +13,10 @@ class ImportedStrat(GameStrategy):
         :return: Your next move
         """
 
-        steal_weight = reduce(
-            lambda acc, move: acc + 1 if move == GameMove.STEAL else acc,
-            opponent_history,
-        )
-        share_weight = len(opponent_history) - steal_weight
+        share_weight = sum(opponent_history)
+        steal_weight = len(opponent_history) - share_weight
 
-        return choices([GameMove.SHARE, GameMove.STEAL], (share_weight, steal_weight))[0]
+        return choices([GameMove.SHARE, GameMove.STEAL], (steal_weight, share_weight))[0]
 
 
 # This line is required!
