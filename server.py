@@ -16,13 +16,15 @@ Data:
 
 from nicegui import ui, events, app
 
-import time, atexit, copy, io, uuid
+import time, atexit, copy, io, uuid, shutil, os
 import dill as pickle
 import numpy as np
 import pandas as pd
 import os.path as path
 import plotly.graph_objects as go
 import plotly.express as px
+import git
+from git import Repo
 
 from threading import Timer
 from pprint import pprint
@@ -389,14 +391,17 @@ def match_panel_view():
         ui.markdown("Select two teams and start a match to view statistics.")
 
 # Strategy class uploader
-def handle_upload(e: events.UploadEventArguments):
-    text = e.content.read().decode('utf-8')
+def handle_exec(text: str):
     game_args = {}
     exec(text, {'GameStrategy': GameStrategy, 'GameMove': GameMove}, game_args)
 
     strategies.append(game_args['userGame'])
     main_panel.refresh()
     save_dframe("scores.csv", "strategies.bin")
+
+def handle_upload(e: events.UploadEventArguments):
+    text = e.content.read().decode('utf-8')
+    handle_exec(text)
 
 # Home page layout
 @ui.refreshable
@@ -422,6 +427,43 @@ def main_panel():
         with ui.tab_panel('Results'):
             results_view()
 
+# Git repo panel
+gitDialog = None
+gitRepoURL = ''
+@ui.refreshable
+def repo_add():
+    global gitDialog, gitRepoURL
+
+    with ui.dialog() as gitDialog, ui.card():
+        ui.markdown('#### Add Git Strategy Repository <span class="material-icons-sharp" style="color: green">store</span>')
+        ui.markdown('This will remove any important strategies and download all in the given Git reposity link.')
+
+        def setRepoURL(x):
+            global gitRepoURL
+            gitRepoURL = x.value
+
+        ui.input('Paste full URL here...', on_change=setRepoURL).classes("w-full")
+
+        def addGitRepo():
+            global gitDialog, gitRepoURL
+
+            Repo.clone_from(gitRepoURL, "imported")
+
+            for filename in os.listdir("imported/"):
+                f = os.path.join("imported", filename)
+
+                if os.path.isfile(f) and f.endswith(".py"):
+                    with open(f, mode='r') as fm:
+                        handle_exec(fm.read())
+
+            shutil.rmtree("imported", ignore_errors=True)
+            gitDialog.close()
+
+        with ui.row().classes('w-full'):
+            ui.space()
+            ui.button('Add Repo', on_click=addGitRepo)
+            ui.button('Close', on_click=gitDialog.close)
+
 """
 Main app runtime loop
 """
@@ -439,6 +481,7 @@ if __name__ in {"__main__", "__mp_main__"}:
             ui.tab('Results')
             ui.space()
             ui.button('UI Theme', icon='brightness_6', on_click=dark_mode_toggle).classes('mr-2')
+            ui.button('Add Strategy Repository', icon='store', on_click=lambda: gitDialog.open()).classes('mr-2')
             ui.button('Stop Server', icon='logout', on_click=exit_stop_server).classes('mr-2').props('color="red"')
 
     with ui.footer(value=False) as footer:
@@ -446,4 +489,7 @@ if __name__ in {"__main__", "__mp_main__"}:
 
     dark_mode_toggle()
     main_panel()
-    ui.run()
+    repo_add()
+
+    shutil.rmtree("imported", ignore_errors=True)
+    ui.run(uvicorn_reload_excludes="imported/*")

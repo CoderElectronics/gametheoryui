@@ -6,3 +6,4 @@ dill
 fastapi
 numpy
 openpyxl
+gitpython
