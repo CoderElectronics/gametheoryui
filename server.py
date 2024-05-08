@@ -492,4 +492,4 @@ if __name__ in {"__main__", "__mp_main__"}:
     repo_add()
 
     shutil.rmtree("imported", ignore_errors=True)
-    ui.run(uvicorn_reload_excludes="imported/*")
+    ui.run(uvicorn_reload_excludes="imported/*,strategies.bin,scores.csv")
