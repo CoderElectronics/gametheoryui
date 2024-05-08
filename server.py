@@ -148,6 +148,7 @@ def class_view(cls, actions=True, card=True):
 
         if actions:
             with ui.row():
+                # Add class
                 def add_to_view():
                     match_games.append(cls)
                     match_view.refresh()
@@ -155,6 +156,19 @@ def class_view(cls, actions=True, card=True):
                 with ui.button('', on_click=add_to_view):
                     ui.icon('add')
                     ui.label("add to match")
+
+                # Remove class
+                def remove_strategy():
+                    strategies.remove(cls)
+                    save_dframe("scores.csv", "strategies.bin")
+
+                    match_view.refresh()
+                    main_panel.refresh()
+
+                with ui.button('', color='red', on_click=remove_strategy):
+                    ui.icon('delete')
+                    ui.label("Remove")
+
                 ui.button('View results', on_click=lambda: panels.set_value('Results'))
 
 # Home page match options and current match status section view
