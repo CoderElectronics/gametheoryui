@@ -180,19 +180,47 @@ def match_view(clss):
 
         with ui.row():
             def start_match():
-                global match_active, panels, match_scores, match_plays, match_parameters
+                global match_active, panels, match_plays, match_scores, match_parameters, match_games
 
                 if len(match_games) == 2:
                     match_active = True
                     match_panel_view.refresh()
 
-                    ui.notify('Match started, jumping to match tab', type='success')
+                    errorDialog, eCode = None, ""
+                    @ui.refreshable
+                    def errorPanel():
+                        nonlocal errorDialog, eCode
+                        with ui.dialog() as errorDialog, ui.card():
+                            ui.markdown('#### Strategy Error <span class="material-icons-sharp" style="color: red">error</span>')
+                            ui.markdown('Please correct the error, remove, and re-import the strategy before trying again.')
 
-                    match_plays, match_scores = run_strategy_game(match_parameters, match_games)
+                            ui.code(eCode).classes('w-full')
 
-                    match_panel_view.refresh()
+                            with ui.row().classes('w-full'):
+                                ui.space()
+                                ui.button('Close', on_click=errorDialog.close)
 
-                    Timer(1, lambda: panels.set_value('Match View')).start()
+                    errorPanel()
+
+                    try:
+                        match_plays, match_scores = run_strategy_game(match_parameters, match_games)
+                    except Exception as e:
+                        print('Error: {}'.format(e))
+
+                        eCode = str(e)
+                        match_plays = [[], []]
+                        match_scores = [[], []]
+                        match_games.clear()
+                        match_active = False
+
+                        errorPanel.refresh()
+                        errorDialog.open()
+
+                    if not eCode:
+                        match_panel_view.refresh()
+
+                        ui.notify('Match started, jumping to match tab', type='success')
+                        Timer(1, lambda: panels.set_value('Match View')).start()
                 else:
                     ui.notify('Please select 2 teams before starting a match', type='warning')
 
