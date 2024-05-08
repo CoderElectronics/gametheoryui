@@ -1,11 +1,12 @@
+from abc import ABC
 from enum import Enum
 
 class GameMove(Enum):
     STEAL = 0
     SHARE = 1
 
-class GameStrategy:
-    meta = {}
+class GameStrategy(ABC):
+    meta: dict[str, str]
 
     def __init__(self, name: str, author: str, description: str) -> None:
         self.meta = {'name': name, 'author': author, 'description': description}
@@ -19,4 +20,4 @@ class GameStrategy:
         :param opponent_history: List of the opponent's moves
         :return: Your next move
         """
-        pass
+        raise NotImplementedError("Implement this method")
