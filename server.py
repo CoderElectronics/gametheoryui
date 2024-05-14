@@ -36,7 +36,7 @@ from game_class import GameStrategy, GameMove
 strategies = []
 match_games = []
 match_active = False
-match_results = pd.DataFrame(columns=['strategy', 'score'])
+match_results = pd.DataFrame(columns=['strategy', 'score', 'opponent', 'opponent_score'])
 
 # Match status
 match_parameters = {
@@ -150,10 +150,11 @@ def tournament_view():
 
     # Make copy
     tournament_strategies = strategies
+    Nslider = None
 
     def run_games_all():
         global match_active, panels, match_plays, match_scores, match_parameters, match_games, match_results, results_view
-        nonlocal tournament_strategies
+        nonlocal tournament_strategies, Nslider
 
         errorDialog, eCode, eStrat = None, "", ""
 
@@ -174,10 +175,14 @@ def tournament_view():
 
         errorPanelTournamet()
 
-        for a, b in it.combinations(tournament_strategies, 2):
-            match_games = [a, b]
+        results_scaff = pd.DataFrame(columns=['strategy', 'score', 'opponent', 'opponent_score'])
+
+        for mt in list(it.combinations(tournament_strategies, 2))*Nslider.value:
+            match_games = mt
             match_active = True
             match_panel_view.refresh()
+
+            errorDialog, eCode, eStrat = None, "", ""
 
             try:
                 match_plays, match_scores = run_strategy_game(match_parameters, match_games)
@@ -197,13 +202,16 @@ def tournament_view():
 
                 return 0
 
-            ndf = pd.DataFrame([
-                {'strategy': match_games[0].get_meta()["name"], 'score': np.sum(match_scores[0])},
-                {'strategy': match_games[1].get_meta()["name"], 'score': np.sum(match_scores[1])}
-            ])
+            if not eCode:
+                ndf = pd.DataFrame([
+                    {'strategy': match_games[0].get_meta()["name"], 'score': np.sum(match_scores[0]), 'opponent': match_games[1].get_meta()["name"], 'opponent_score': np.sum(match_scores[1])},
+                    {'strategy': match_games[1].get_meta()["name"], 'score': np.sum(match_scores[1]), 'opponent': match_games[0].get_meta()["name"], 'opponent_score': np.sum(match_scores[0])}
+                ])
 
-            match_results = pd.concat([match_results, ndf])
-            results_view.refresh()
+                results_scaff = pd.concat([results_scaff, ndf])
+
+        match_results = pd.concat([match_results, results_scaff])
+        results_view.refresh()
 
         save_dframe("scores.csv", "strategies.bin")
 
@@ -235,8 +243,36 @@ def tournament_view():
 
         with ui.row().classes('w-full'):
             ui.space()
-            slider = ui.slider(min=1, max=100, value=1).classes('w-3/4')
-            ui.label().bind_text_from(slider, 'value', lambda x: "N = "+str(x)).classes("text-lg")
+            Nslider = ui.slider(min=1, max=50, value=1).classes('w-3/4')
+            ui.label().bind_text_from(Nslider, 'value', lambda x: "N = "+str(x)).classes("text-lg")
+            ui.space()
+
+        def set_game_param(param, e):
+            global match_parameters
+            print("Param updated: {}, {}".format(param, e))
+            match_parameters[param] = e
+
+            match_view.refresh()
+
+        with ui.row().classes('w-full'):
+            ui.space()
+
+            with ui.expansion('Match Options', icon='work').classes("w-11/12"):
+                with ui.column():
+                    with ui.row():
+                        ui.number(label='Number of Rounds', value=match_parameters["num_rounds"],
+                                  on_change=lambda e: set_game_param('num_rounds', e.value))
+
+                        ui.number(label='Share Amount (pts/$)', value=match_parameters["share_amount"],
+                                  on_change=lambda e: set_game_param('share_amount', e.value))
+
+                    with ui.row():
+                        ui.number(label='Single Steal Amount (pts/$)', value=match_parameters["steal_amount"],
+                                  on_change=lambda e: set_game_param('steal_amount', e.value))
+
+                        ui.number(label='Double Steal Amount (pts/$)', value=match_parameters["steal_min_amount"],
+                                  on_change=lambda e: set_game_param('steal_min_amount', e.value))
+
             ui.space()
 
         ui.space()
@@ -384,11 +420,11 @@ def results_view():
     with ui.row():
         # Match result visualization UI code
         if match_results[match_results.columns[0]].count() > 0:
-            fig = px.bar(match_results, x='strategy', y='score')
+            fig = px.bar(match_results, x='strategy', y='score', hover_data=['opponent', 'opponent_score'])
 
             ui.plotly(fig)
 
-            fig_scatter = px.scatter(match_results, x='strategy', y='score', size=list(match_results['score']), color=list(match_results['score']), hover_data=['score'])
+            fig_scatter = px.scatter(match_results, x='strategy', y='score', size=list(match_results['score']), color=list(match_results['score']), hover_data=['opponent', 'opponent_score'])
 
             ui.plotly(fig_scatter)
         else:
@@ -475,8 +511,8 @@ def match_panel_view():
             global match_results
 
             ndf = pd.DataFrame([
-                {'strategy': match_games[0].get_meta()["name"], 'score': np.sum(match_scores[0])},
-                {'strategy': match_games[1].get_meta()["name"], 'score': np.sum(match_scores[1])}
+                {'strategy': match_games[0].get_meta()["name"], 'score': np.sum(match_scores[0]), 'opponent': match_games[1].get_meta()["name"], 'opponent_score': np.sum(match_scores[1])},
+                {'strategy': match_games[1].get_meta()["name"], 'score': np.sum(match_scores[1]), 'opponent': match_games[0].get_meta()["name"], 'opponent_score': np.sum(match_scores[0])}
             ])
 
             match_results = pd.concat([match_results, ndf])
