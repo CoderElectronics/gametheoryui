@@ -25,6 +25,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 import git
 from git import Repo
+import itertools as it
 
 from threading import Timer
 from pprint import pprint
@@ -142,6 +143,110 @@ def dark_mode_toggle():
 """
 Actual tabs and UI elements
 """
+tournamentDialog = None
+@ui.refreshable
+def tournament_view():
+    global tournamentDialog, strategies
+
+    # Make copy
+    tournament_strategies = strategies
+
+    def run_games_all():
+        global match_active, panels, match_plays, match_scores, match_parameters, match_games, match_results, results_view
+        nonlocal tournament_strategies
+
+        errorDialog, eCode, eStrat = None, "", ""
+
+        @ui.refreshable
+        def errorPanelTournamet():
+            nonlocal errorDialog, eCode
+            with ui.dialog() as errorDialog, ui.card():
+                ui.markdown(
+                    '#### Strategy Error <span class="material-icons-sharp" style="color: red">error</span> - {}'.format(
+                        eStrat))
+                ui.markdown('Please correct the error, remove, and re-import the strategy before trying again.')
+
+                ui.code(eCode).classes('w-full')
+
+                with ui.row().classes('w-full'):
+                    ui.space()
+                    ui.button('Close', on_click=errorDialog.close)
+
+        errorPanelTournamet()
+
+        for a, b in it.combinations(tournament_strategies, 2):
+            match_games = [a, b]
+            match_active = True
+            match_panel_view.refresh()
+
+            try:
+                match_plays, match_scores = run_strategy_game(match_parameters, match_games)
+            except Exception as e:
+                print('Error: {}'.format(e))
+
+                eCode = str(e)
+                eStrat = match_games[0].get_meta()["name"] + ", " + match_games[1].get_meta()["name"]
+
+                match_plays = [[], []]
+                match_scores = [[], []]
+                match_games.clear()
+                match_active = False
+
+                errorPanelTournamet.refresh()
+                errorDialog.open()
+
+                return 0
+
+            ndf = pd.DataFrame([
+                {'strategy': match_games[0].get_meta()["name"], 'score': np.sum(match_scores[0])},
+                {'strategy': match_games[1].get_meta()["name"], 'score': np.sum(match_scores[1])}
+            ])
+
+            match_results = pd.concat([match_results, ndf])
+            results_view.refresh()
+
+        save_dframe("scores.csv", "strategies.bin")
+
+        tournamentDialog.close()
+
+        ui.notify('Large match-up completed, opening results tab.', type='success')
+        Timer(2, lambda: panels.set_value('Results')).start()
+
+    with ui.dialog() as tournamentDialog, ui.card():
+
+        ui.markdown('#### Run Tournament <span class="material-icons-sharp">filter_list</span>')
+        ui.markdown('This will match all strategies and play N equal rounds against each. Remove unwanted strategies and then start the tournament.')
+
+        with ui.row().classes('w-full'):
+            ui.space()
+
+            with ui.card().classes("border-solid border-2 border-sky-500 rounded-lg"):
+                with ui.row():
+                    for ui_strat in tournament_strategies:
+                        def clean_from_chips(dist_meta):
+                            nonlocal tournament_strategies
+
+                            tournament_strategies = list(filter(lambda r: dist_meta.sender.text != r.get_meta()["name"], tournament_strategies))
+                            print(len(tournament_strategies))
+
+                        ui.chip(ui_strat.get_meta()["name"], removable=True, icon='label', color='sky-500').on("update:model-value", handler=clean_from_chips).classes("m-0")
+
+            ui.space()
+
+        with ui.row().classes('w-full'):
+            ui.space()
+            slider = ui.slider(min=1, max=100, value=1).classes('w-3/4')
+            ui.label().bind_text_from(slider, 'value', lambda x: "N = "+str(x)).classes("text-lg")
+            ui.space()
+
+        ui.space()
+
+        with ui.row().classes('w-full'):
+            ui.space()
+            ui.button('Start Tournament', on_click=lambda: run_games_all())
+            ui.button('Close', on_click=tournamentDialog.close)
+
+
 @ui.refreshable
 def class_view(cls, actions=True, card=True):
     meta = cls.get_meta()
@@ -471,7 +576,7 @@ Main app runtime loop
 if __name__ in {"__main__", "__mp_main__"}:
     # Register dataframe callbacks
     load_dframe("scores.csv", "strategies.bin")
-    #atexit.register(lambda: save_dframe("scores.csv"))
+    # atexit.register(lambda: save_dframe("scores.csv"))
 
     # Main window UI stuff
     with ui.header().classes(replace='row items-center w-full') as header:
@@ -480,8 +585,15 @@ if __name__ in {"__main__", "__mp_main__"}:
             ui.tab('Match View')
             ui.tab('Results')
             ui.space()
-            ui.button('UI Theme', icon='brightness_6', on_click=dark_mode_toggle).classes('mr-2')
-            ui.button('Add Strategy Repository', icon='store', on_click=lambda: gitDialog.open()).classes('mr-2')
+            ui.button('Theme', icon='brightness_6', on_click=dark_mode_toggle).classes('mr-2')
+
+            def ref_tournament():
+                tournament_view.refresh()
+                tournamentDialog.open()
+
+            ui.button('Tournament', icon='sort', on_click=ref_tournament).classes('mr-2')
+
+            ui.button('Add Git Repo', icon='store', on_click=lambda: gitDialog.open()).classes('mr-2')
             ui.button('Stop Server', icon='logout', on_click=exit_stop_server).classes('mr-2').props('color="red"')
 
     with ui.footer(value=False) as footer:
@@ -490,6 +602,7 @@ if __name__ in {"__main__", "__mp_main__"}:
     dark_mode_toggle()
     main_panel()
     repo_add()
+    tournament_view()
 
     shutil.rmtree("imported", ignore_errors=True)
     ui.run(uvicorn_reload_excludes="imported/*,strategies.bin,scores.csv")
