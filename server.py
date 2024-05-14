@@ -102,7 +102,8 @@ def load_dframe(pth, pth_strats):
 def save_dframe(pth, pth_strats):
     global match_results
     global strategies
-    print("Saving data to", pth)
+
+    print("Saving data to {} and {}".format(pth, pth_strats))
 
     match_results.to_csv(pth, index=False)
     with open(pth_strats, "wb") as f:
@@ -114,6 +115,17 @@ def clear_matches():
 
     match_view.refresh()
     match_panel_view.refresh()
+
+def clear_strategies():
+    global strategies
+
+    strategies.clear()
+
+    save_dframe("scores.csv", "strategies.bin")
+
+    match_view.refresh()
+    match_panel_view.refresh()
+    main_panel.refresh()
 
 def exit_stop_server():
     save_dframe("scores.csv", "strategies.bin")
@@ -178,7 +190,7 @@ def tournament_view():
         results_scaff = pd.DataFrame(columns=['strategy', 'score', 'opponent', 'opponent_score'])
 
         for mt in list(it.combinations(tournament_strategies, 2))*Nslider.value:
-            match_games = mt
+            match_games = list(mt)
             match_active = True
             match_panel_view.refresh()
 
@@ -583,7 +595,8 @@ def repo_add():
             global gitRepoURL
             gitRepoURL = x.value
 
-        ui.input('Paste full URL here...', on_change=setRepoURL).classes("w-full")
+        inURL = ui.input('Paste full URL here...', on_change=setRepoURL, value="https://github.com/CoderElectronics/gametheoryui-strategies").classes("w-full")
+        setRepoURL(inURL)
 
         def addGitRepo():
             global gitDialog, gitRepoURL
@@ -598,10 +611,15 @@ def repo_add():
                         handle_exec(fm.read())
 
             shutil.rmtree("imported", ignore_errors=True)
+
+            ui.notify('All strategies imported successfully.', type='success')
             gitDialog.close()
+
+        ui.space()
 
         with ui.row().classes('w-full'):
             ui.space()
+            ui.button('Remove All Strats', on_click=clear_strategies, color='red')
             ui.button('Add Repo', on_click=addGitRepo)
             ui.button('Close', on_click=gitDialog.close)
 
@@ -641,4 +659,4 @@ if __name__ in {"__main__", "__mp_main__"}:
     tournament_view()
 
     shutil.rmtree("imported", ignore_errors=True)
-    ui.run(uvicorn_reload_excludes="imported/*,strategies.bin,scores.csv")
+    ui.run(uvicorn_reload_excludes="imported/*,imported/*/*,strategies.bin,scores.csv,imported")
