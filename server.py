@@ -229,6 +229,8 @@ def tournament_view():
 
         tournamentDialog.close()
 
+        main_panel.refresh()
+
         ui.notify('Large match-up completed, opening results tab.', type='success')
         Timer(2, lambda: panels.set_value('Results')).start()
 
